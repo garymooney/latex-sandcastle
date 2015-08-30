@@ -394,7 +394,7 @@
  * 11/18/09	J.Forkosh	Version 1.72 released.
  * 11/15/11	J.Forkosh	Version 1.73 released.
  * 02/15/12	J.Forkosh	Version 1.74 released.
- * 03/31/12	J.Forkosh	Most recent revision (also see REVISIONDATE)
+ * 09/26/12	J.Forkosh	Most recent revision (also see REVISIONDATE)
  * See  http://www.forkosh.com/mimetexchangelog.html  for further details.
  *
  ****************************************************************************/
@@ -403,7 +403,7 @@
 Program id
 -------------------------------------------------------------------------- */
 #define	VERSION "1.74"			/* mimeTeX version number */
-#define REVISIONDATE "31 March 2012" /* date of most recent revision */
+#define REVISIONDATE "26 Sept 2012"	/* date of most recent revision */
 #define COPYRIGHTTEXT "Copyright(c) 2002-2012, John Forkosh Associates, Inc"
 
 /* -------------------------------------------------------------------------
@@ -862,6 +862,7 @@ GLOBAL(int,warninglevel,WARNINGLEVEL);	/* warning level */
 /* -------------------------------------------------------------------------
 control flags and values
 -------------------------------------------------------------------------- */
+GLOBAL(int,isquery,0);			/* true=cgi?query; false=commandline*/
 GLOBAL(int,daemonlevel,0);		/* incremented in main() */
 GLOBAL(int,recurlevel,0);		/* inc/decremented in rasterize() */
 GLOBAL(int,scriptlevel,0);		/* inc/decremented in rastlimits() */
@@ -915,6 +916,8 @@ GLOBAL(int,fgalias,1);
   GLOBAL(int,bgonly,0);			/* aapnm() params */
 GLOBAL(int,issupersampling,ISSUPERSAMPLING); /*1=supersampling 0=lowpass*/
 GLOBAL(int,isss,ISSUPERSAMPLING);	/* supersampling flag for main() */
+GLOBAL(int,ispbmpgm,0);			/* true for pbm/pgm instead of gif */
+GLOBAL(int,pbmpgmtype,0);		/* 1=pbm / 2=pgm (else error) */
 GLOBAL(int,*workingparam,(int *)NULL);	/* working parameter */
 GLOBAL(subraster,*workingbox,(subraster *)NULL); /*working subraster box*/
 GLOBAL(int,isreplaceleft,0);		/* true to replace leftexpression */
@@ -3805,6 +3808,13 @@ else if ( *file != '\000' ) {		/* explicit filename provided, so...*/
   if ( (fp = fopen(fname,mode[ptype]))	/* open output file */
   ==   (FILE *)NULL ) goto end_of_job;	/* quit if failed to open */
   } /* --- ens-of-if(*file!='\0') --- */
+/* -------------------------------------------------------------------------
+emit http headers if running as cgi
+-------------------------------------------------------------------------- */
+/* --- emit mime content-type line --- */
+if ( isquery && fp==stdout )		/* writing to http server */
+ { fprintf( stdout, "Cache-Control: max-age=9999\n" );
+   fprintf( stdout, "Content-type: text/plain\n\n" ); }
 /* -------------------------------------------------------------------------
 format and write header
 -------------------------------------------------------------------------- */
@@ -8374,6 +8384,7 @@ switch ( flag )
   case ISCOLOR:				/* set red(1),green(2),blue(3) */
   case ISSMASH:				/* set (minimum) "smash" margin */
   case ISGAMMA:				/* set gamma correction */
+  case ISPBMPGM:			/* set pbmpgm output flag and ptype*/
     if ( value != NOVALUE )		/* passed a fixed value to be set */
       {	argvalue = value;		/* set given fixed int value */
 	dblvalue = (double)value; }	/* or maybe interpreted as double */
@@ -8449,6 +8460,12 @@ switch ( flag )
       case ISCONTENTCACHED:		/* write content-type to cache file*/
 	if ( argvalue != NOVALUE )	/* got a value */
 	    iscachecontenttype = (argvalue>0?1:0);
+	break;
+      case ISPBMPGM:			/* output pbm/pgm rather than gif */
+        ispbmpgm = 1;			/* always set pbm/pgm flag */
+        pbmpgmtype = 1;			/* and init type (1 for pbm) */
+	if ( argvalue != NOVALUE )	/* got a value */
+	    pbmpgmtype = (argvalue<1?1:argvalue);
 	break;
       case ISSMASH:			/* set (minimum) "smash" margin */
 	if ( argvalue != NOVALUE )	/* got a value */
@@ -15402,7 +15419,7 @@ char	*query = getenv("QUERY_STRING"); /* getenv("QUERY_STRING") result */
 char	*mimeprep();			/* preprocess expression */
 int	unescape_url();			/* convert %xx's to ascii chars */
 int	emitcache();			/* emit cached image if it exists */
-int	isquery = 0,			/* true if input from QUERY_STRING */
+int	/*isquery = 0, (now global)*/	/* true if input from QUERY_STRING */
 	isqempty = 0,			/* true if query string empty */
 	isqforce = 0,			/* true to force query emulation */
 	isqlogging = 0,			/* true if logging in query mode */
@@ -15450,8 +15467,8 @@ char	*gif_outfile = (char *)NULL,	/* gif output defaults to stdout */
 int	maxage = 7200;			/* max-age is two hours */
 int	valign = (-9999);		/*Vertical-Align:baseline-(height-1)*/
 /* --- pbm/pgm (-g switch) --- */
-int	ispbmpgm = 0;			/* true to write pbm/pgm file */
-int	type_pbmpgm(), ptype=0;		/* entry point, graphic format */
+/*int	ispbmpgm = 0; (now global)*/	/* true to write pbm/pgm file */
+int	type_pbmpgm();			/* entry point, graphic format */
 char	*pbm_outfile = (char *)NULL;	/* output file defaults to stdout */
 /* --- anti-aliasing --- */
 intbyte	*bytemap_raster = NULL,		/* anti-aliased bitmap */
@@ -15582,7 +15599,7 @@ if ( !isquery				/* don't have an html query string */
 	case 'e': isdumpimage++;           gif_outfile=argv[argnum];  break;
 	case 'f': isdumpimage++;                   infilearg=argnum;  break;
 	case 'g': ispbmpgm++;
-	     if ( arglen > 1 ) ptype = atoi(field+1);	/* -g2 ==> ptype=2 */
+	     if ( arglen > 1 ) pbmpgmtype = atoi(field+1); /* -g2==>type=2 */
 	     if ( 1 || *argv[argnum]=='-' ) argnum--; /*next arg is -switch*/
 	     else pbm_outfile = argv[argnum]; break; /*next arg is filename*/
 	case 'm': if ( argnum < argc ) msglevel = atoi(argv[argnum]); break;
@@ -15816,7 +15833,8 @@ if ( isquery )				/* not relevant if "interactive" */
  * -------------------------------------------- */
 if ( isquery )				/* not relevant if "interactive" */
  if ( !isinvalidreferer )		/* nor if already invalid referer */
-  { int	iref=0, msgnum=(-999);		/* denyreferer index, message# */
+  { int	iref=0, msgnum=(-999),		/* denyreferer index, message# */
+    whundredths = 0;			/* or wait hundredths of a sec */
     for ( iref=0; msgnum<0; iref++ ) {	/* run through denyreferer[] table */
       char *deny = denyreferer[iref].referer; /* referer to be denied */
       if ( deny == NULL ) break;	/* null signals end-of-table */
@@ -15831,10 +15849,13 @@ if ( isquery )				/* not relevant if "interactive" */
 	if ( isstrstr(http_referer,deny,0) ) /* invalid http_referer */
 	 msgnum = denyreferer[iref].msgnum; /* so set message# */
       } /* --- end-of-for(iref) --- */
-    if ( msgnum >= 0 )			/* deny access to this referer */
-     { if ( msgnum > maxmsgnum ) msgnum = 0; /* keep index within bounds */
-       expression = msgtable[msgnum];	/* set user error message */
-       isinvalidreferer = 1; }		/* and signal invalid referer */
+    if ( msgnum >= 100 ) {		/* wait but don't deny */
+      whundredths = 10*(msgnum-100);	/* hundredths=10*tenths */
+      msgnum = (-999); }		/* reset valid referer */
+    if ( msgnum >= 0 ) {		/* deny access to this referer */
+      if ( msgnum > maxmsgnum ) msgnum = 0; /* keep index within bounds */
+      expression = msgtable[msgnum];	/* set user error message */
+      isinvalidreferer = 1; }		/* and signal invalid referer */
   } /* --- end-of-if(!isinvalidreferer) --- */
 /* --- also check maximum query_string length if no http_referer given --- */
 if ( isquery )				/* not relevant if "interactive" */
@@ -15937,7 +15958,7 @@ if ( isquery )				/* don't cache command-line images */
 /* ---
  * emit copyright, gnu/gpl notice (if "interactive")
  * ------------------------------------------------- */
-if ( !isdumpimage )			/* don't mix ascii with image dump */
+if ( !isdumpimage && !ispbmpgm )	/* don't mix ascii with image dump */
  if ( (!isquery||isqlogging) && msgfp!=NULL ) { /* called from command line */
    fprintf(msgfp,"%s\n%s\n",copyright1,copyright2); /* display copyright */
    fprintf(msgfp,"Most recent revision: %s\n",REVISIONDATE); /*revision date*/
@@ -15976,7 +15997,7 @@ if ( (sp = rasterize(expression,size)) == NULL ) { /* failed to rasterize */
   magstep = 1;				/* don't magstep error msgs */
   } /* --- end-of-if((sp=rasterize())==NULL) --- */
 /* --- magnify entire image here if we need >>bit<<map for pbm output --- */
-if ( !isaa || (ispbmpgm && ptype<2) ) {	/*or use bytemapmag() below instead*/
+if ( !isaa || (ispbmpgm && pbmpgmtype<2) ) { /*or use bytemapmag() instead*/
  if ( magstep > 1 && magstep <= 10 ) {	/* magnify entire bitmap image */
   raster *rastmag(), *magrp=NULL;	/* bitmap magnify function */
   int baseline = sp->baseline;		/* original image baseline */
@@ -15990,7 +16011,7 @@ if ( !isaa || (ispbmpgm && ptype<2) ) {	/*or use bytemapmag() below instead*/
     sp->baseline = baseline; }		/*reset baseline of magnified image*/
   magstep = (-1);			/*done, don't also use bytemapmag()*/
   } /* --- end-of-if(magstep) --- */
- } /* --- end-of-if(1||(ispbmpgm&&ptype<2)) --- */
+ } /* --- end-of-if(1||(ispbmpgm&&pbmpgmtype<2)) --- */
 /* ---no border requested, but this adjusts width to multiple of 8 bits--- */
 if ( issupersampling )			/* no border needed for gifs */
   bp = sp->image;			/* so just extract pixel map */
@@ -16002,8 +16023,8 @@ raster_baseline = sp->baseline;		/* global copy (not needed) */
 if ( sp!=NULL && bp!=NULL ) {		/* have raster */
   valign= raster_baseline -(raster_height -1);/*#pixels for Vertical-Align:*/
   if ( abs(valign) > 255 ) valign = (-9999); } /* sanity check */
-if ( ispbmpgm && ptype<2 )		/* -g switch or -g1 switch */
-  type_pbmpgm(bp,ptype,pbm_outfile);	/* emit b/w pbm file */
+if ( ispbmpgm && pbmpgmtype<2 )		/* -g switch or -g1 switch */
+  type_pbmpgm(bp,pbmpgmtype,pbm_outfile); /* emit b/w pbm file */
 /* -------------------------------------------------------------------------
 generate anti-aliased bytemap from (bordered) bitmap
 -------------------------------------------------------------------------- */
@@ -16108,18 +16129,18 @@ if ( isaa )				/* we want anti-aliased bitmap */
 	{ isaa = 0;			/* so turn off anti-aliasing */
 	  ncolors = 2; }		/* and reset for black&white */
       } /* --- end-of-if(isaa) --- */
-     if ( isaa && ispbmpgm && ptype>1 ) { /* -g2 switch  */
+     if ( isaa && ispbmpgm && pbmpgmtype>1 ) { /* -g2 switch  */
       raster pbm_raster;		/*construct arg for write_pbmpgm()*/
       pbm_raster.width  = raster_width;  pbm_raster.height = raster_height;
       pbm_raster.pixsz  = 8;  pbm_raster.pixmap = (pixbyte *)bytemap_raster;
-      type_pbmpgm(&pbm_raster,ptype,pbm_outfile); } /*write grayscale file*/
+      type_pbmpgm(&pbm_raster,pbmpgmtype,pbm_outfile); } /*grayscale file*/
     } /* --- end-of-if(isaa) --- */
   } /* --- end-of-if(isaa) --- */
 /* -------------------------------------------------------------------------
 display results on msgfp if called from command line (usually for testing)
 -------------------------------------------------------------------------- */
 if ( (!isquery||isqlogging) || msglevel >= 99 )	/*command line or debuging*/
- if ( !isdumpimage )			/* don't mix ascii with image dump */
+ if ( !isdumpimage && !ispbmpgm )	/* don't mix ascii with image dump */
   {
   /* ---
    * display ascii image of rasterize()'s rasterized bitmap
@@ -16155,9 +16176,9 @@ if ( (!isquery||isqlogging) || msglevel >= 99 )	/*command line or debuging*/
 /* -------------------------------------------------------------------------
 emit xbitmap or gif image, and exit
 -------------------------------------------------------------------------- */
-if (  isquery				/* called from browser (usual) */
+if (  (isquery     && !ispbmpgm)	/* called from browser (usual) */
 ||    (isdumpimage && !ispbmpgm)	/* or to emit gif dump of image */
-||    msglevel >= 99 )			/* or for debugging */
+||    (msglevel    >= 99) )		/* or for debugging */
  {
  int  igray = 0;			/* grayscale index */
  #if defined(GIF)			/* compiled to emit gif */
@@ -16312,27 +16333,25 @@ end_of_job:
  *		  http://www.shitalshah.com/dev/eq2img_all.zip
  * ======================================================================= */
 /* --- include function to expose Win32 DLL to outside world --- */
-// Added support to change the default font size -- Marcus Cuda Jan 2013
 #if defined(_USRDLL)
   extern _declspec(dllexport)int _cdecl
-	CreateGifFromEq ( char *expression, char *gifFileName, char* defaultSize );
+	CreateGifFromEq ( char *expression, char *gifFileName );
 #endif
 /* --- entry point --- */
-int	CreateGifFromEq ( char *expression, char *gifFileName, char* defaultSize )
+int	CreateGifFromEq ( char *expression, char *gifFileName )
 {
 /* -------------------------------------------------------------------------
 Allocations and Declarations
 -------------------------------------------------------------------------- */
 int	main();			/* main() akways returns an int */
 /* --- set constants --- */
-int	argc = 6;		/* count of args supplied to main() */
-char	*argv[7] =		/* command line args to run with -e option */
-	  { "MimeTeXWin32DLL", "-s", NULL, "-e", /* constant args */
+int	argc = 4;		/* count of args supplied to main() */
+char	*argv[5] =		/* command line args to run with -e option */
+	  { "MimeTeXWin32DLL", "-e", /* constant args */
 	    /*gifFileName, expression,*/ NULL, NULL, NULL };
 /* --- set argv[]'s not computable at load time --- */
-argv[2] = defaultSize;
-argv[4] = gifFileName;		/* args are -e gifFileName */
-argv[5] = expression;		/* and now  -e gifFileName expression */
+argv[2] = gifFileName;		/* args are -e gifFileName */
+argv[3] = expression;		/* and now  -e gifFileName expression */
 /* -------------------------------------------------------------------------
 Run mimeTeX in command-line mode with -e (export) option, and then return
 -------------------------------------------------------------------------- */

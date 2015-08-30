@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2008-2009 Marcus Cuda - http://marcuscuda.com
+ * Copyright 2008-2015 Marcus Cuda - http://marcuscuda.com
  *
  *  This file is part of LaTeX Build Component.
  *
@@ -15,18 +15,23 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with LaTeX Build Component.  If not, see <http://www.gnu.org/licenses/>.
+ *   
+ * 08/30/2015 - EFW - Updated for use with the latest release of the Sandcastle Help File Builder
  */
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.Composition.Hosting;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
 using System.Xml;
-using System.Xml.XPath;
 using System.Xml.Linq;
-using Microsoft.Ddue.Tools;
+using System.Xml.XPath;
+
+using Sandcastle.Core.BuildAssembler;
+using Sandcastle.Core.BuildAssembler.BuildComponent;
 
 namespace LatexBuildComponent
 {
@@ -36,14 +41,86 @@ namespace LatexBuildComponent
     /// <example>
     /// <latex>f(x)=x^2</latex> 
     /// </example>
-    public class LatexBuildComponent : BuildComponent
+    public class LatexBuildComponent : BuildComponentCore
     {
+        #region Build component factory for MEF
+        //=====================================================================
+
+        /// <summary>
+        /// This is used to create a new instance of the build component used to generate LaTeX images
+        /// </summary>
+        [BuildComponentExport("LaTeX Build Component", IsVisible = true, IsConfigurable = true,
+          Version = AssemblyInfo.ProductVersion, Copyright = AssemblyInfo.Copyright,
+          Description = "This build component converts LaTeX code into images")]
+        public sealed class Factory : BuildComponentFactory
+        {
+            /// <summary>
+            /// Constructor
+            /// </summary>
+            public Factory()
+            {
+                base.ReferenceBuildPlacement = new ComponentPlacement(PlacementAction.Before,
+                    "XSL Transform Component");
+                base.ConceptualBuildPlacement = new ComponentPlacement(PlacementAction.Before,
+                    "XSL Transform Component");
+            }
+
+            /// <inheritdoc />
+            public override BuildComponentCore Create()
+            {
+                return new LatexBuildComponent(base.BuildAssembler);
+            }
+
+            /// <inheritdoc />
+            public override string DefaultConfiguration
+            {
+                get
+                {
+                    return @"<helpType value=""{@HelpFileFormat}"" />
+<basePath value=""{@WorkingFolder}"" />
+<fontSize value=""3"" />";
+                }
+            }
+
+            /// <inheritdoc />
+            public override string ConfigureComponent(string currentConfiguration, CompositionContainer container)
+            {
+                // Open the dialog to edit the configuration
+                using(var dlg = new LatexConfigDlg(currentConfiguration))
+                {
+                    // Get the modified configuration if OK was clicked
+                    if(dlg.ShowDialog() == DialogResult.OK)
+                    {
+                        _fontSize = dlg.FontSize;
+
+                        var config = XElement.Parse(currentConfiguration);
+
+                        config.Element("fontSize").Attribute("value").SetValue(_fontSize);
+                        currentConfiguration = config.ToString();
+                    }
+                }
+
+                // Return the configuration data
+                return currentConfiguration;
+            }
+        }
+        #endregion
+
+        #region Private data members
+        //=====================================================================
+
         private readonly UnicodeEncoding _encoding = new UnicodeEncoding();
         private readonly SHA256 _hasher = new SHA256CryptoServiceProvider();
         private readonly IDictionary<byte[], string> _imgNameCache = new Dictionary<byte[], string>(new KeyComparer());
-        private readonly string[] _paths;
+
+        private string[] _paths;
         private uint _count = 1;
         private static string _fontSize = "3";
+
+        #endregion
+
+        #region Constructor
+        //=====================================================================
 
         /// <summary>
         /// Constructor
@@ -52,33 +129,23 @@ namespace LatexBuildComponent
         /// <param name="configuration">The configuration information</param>
         /// <exception cref="System.Configuration.ConfigurationErrorsException">This is thrown if an error is detected in the
         /// configuration.</exception>
-        public LatexBuildComponent(BuildAssembler assembler, XPathNavigator configuration)
-            : base(assembler, configuration)
+        public LatexBuildComponent(BuildAssemblerCore assembler) : base(assembler)
+        {
+        }
+        #endregion
+
+        #region Method overrides
+        //=====================================================================
+
+        /// <inheritdoc />
+        public override void Initialize(XPathNavigator configuration)
         {
             var nav = configuration.SelectSingleNode("fontSize");
-            if (nav != null)
-            {
+
+            if(nav != null)
                 _fontSize = nav.GetAttribute("value", String.Empty);
-            }
+
             _paths = GetWorkingDirectories(configuration);
-        }
-
-        /// <summary>
-        /// Returns the image name from the cache if exists, otherwise creates one, places it in the cache
-        /// and returns in.
-        /// </summary>
-        private Tuple<bool,string> GetImageName(string xml)
-        {
-            var hash = _hasher.ComputeHash(_encoding.GetBytes(xml));
-
-            if (_imgNameCache.ContainsKey(hash))
-            {
-                return new Tuple<bool, string>(true,_imgNameCache[hash]);
-            }
-
-            var filename = "img_" + _count++ + ".gif";
-            _imgNameCache.Add(hash, filename);
-            return new Tuple<bool, string>(false, filename);
         }
 
         /// <summary>
@@ -90,19 +157,25 @@ namespace LatexBuildComponent
         {
             var latexList = document.SelectNodes("//latex");
 
-            if (latexList == null) return;
-            foreach (XmlNode code in latexList)
+            if(latexList == null)
+                return;
+
+            foreach(XmlNode code in latexList)
             {
                 var attr = code.Attributes.GetNamedItem("expr");
                 var expression = attr == null ? code.InnerText : attr.InnerText;
-                if (String.IsNullOrWhiteSpace(expression)) continue;
+
+                if(String.IsNullOrWhiteSpace(expression))
+                    continue;
+
                 var result = GetImageName(expression);
                 var filename = result.Item2;
-                if (!result.Item1)
+
+                if(!result.Item1)
                 {
-                    foreach (var path in _paths)
+                    foreach(var path in _paths)
                     {
-                        //TODO: copy instead of running foreach path
+                        //TODO: copy instead of running for each path
                         SafeNativeMethods.CreateGifFromEq(expression, path + filename, _fontSize);
                     }
                 }
@@ -114,12 +187,34 @@ namespace LatexBuildComponent
                 code.ParentNode.ReplaceChild(img, code);
             }
         }
+        #endregion
+
+        #region Helper methods
+        //=====================================================================
+
+        /// <summary>
+        /// Returns the image name from the cache if exists, otherwise creates one, places it in the cache
+        /// and returns in.
+        /// </summary>
+        private Tuple<bool, string> GetImageName(string xml)
+        {
+            var hash = _hasher.ComputeHash(_encoding.GetBytes(xml));
+
+            if(_imgNameCache.ContainsKey(hash))
+            {
+                return new Tuple<bool, string>(true, _imgNameCache[hash]);
+            }
+
+            var filename = "img_" + _count++ + ".gif";
+            _imgNameCache.Add(hash, filename);
+            return new Tuple<bool, string>(false, filename);
+        }
 
         private static string GetBasePath(XPathNavigator configuration)
         {
             var basePath = ".\\";
             var nav = configuration.SelectSingleNode("basePath");
-            if (nav != null)
+            if(nav != null)
             {
                 basePath = nav.GetAttribute("value", String.Empty);
             }
@@ -131,30 +226,29 @@ namespace LatexBuildComponent
         {
             var basePath = GetBasePath(configuration);
             var nav = configuration.SelectSingleNode("helpType");
-            if (nav == null)
-            {
+
+            if(nav == null)
                 throw new ArgumentException("helpType not specified in the configuration file.");
-            }
 
             var selected = nav.GetAttribute("value", String.Empty);
             var types = selected.Split(',');
 
             var paths = new string[types.Length];
 
-            for (var i = 0; i < paths.Length; i++)
+            for(var i = 0; i < paths.Length; i++)
             {
                 var type = types[i].Trim();
 
                 string path;
-                if (type.Equals("HtmlHelp1", StringComparison.InvariantCultureIgnoreCase))
+                if(type.Equals("HtmlHelp1", StringComparison.InvariantCultureIgnoreCase))
                 {
                     path = @"Output\HtmlHelp1\Html\";
                 }
-                else if (type.Equals("Website", StringComparison.InvariantCultureIgnoreCase))
+                else if(type.Equals("Website", StringComparison.InvariantCultureIgnoreCase))
                 {
                     path = @"Output\Website\Html\";
                 }
-                else if (type.Equals("MSHelpViewer", StringComparison.InvariantCultureIgnoreCase))
+                else if(type.Equals("MSHelpViewer", StringComparison.InvariantCultureIgnoreCase))
                 {
                     path = @"Output\MSHelpViewer\Html\";
                 }
@@ -167,30 +261,7 @@ namespace LatexBuildComponent
 
             return paths;
         }
-
-        /// <summary>
-        /// Configures the component. 
-        /// </summary>
-        /// <param name="configXml">The current configuration.</param>
-        /// <returns>The updated configuration.</returns>
-        public static string ConfigureComponent(string configXml)
-        {
-            // Open the dialog to edit the configuration
-            using (var dlg = new LatexConfigDlg(configXml))
-            {
-                // Get the modified configuration if OK was clicked
-                if (dlg.ShowDialog() == DialogResult.OK)
-                {
-                    _fontSize = dlg.FontSize;
-                }
-                var config = XElement.Parse(configXml);
-                config.Element("fontSize").Attribute("value").SetValue(_fontSize);
-                configXml = config.ToString();
-            }
-
-            // Return the configuration data
-            return configXml;
-        }
+        #endregion
 
         #region Nested type: KeyComparer
 

@@ -642,6 +642,7 @@ subraster *rastnoop();			/* handle \escape's to be flushed */
 #define	ISSMASH		(12)		/* set (minimum) "smash" margin */
 #define	ISCONTENTTYPE	(13)		/*enable/disable Content-type lines*/
 #define	ISCONTENTCACHED	(14)		/* write Content-type to cache file*/
+#define	ISPBMPGM	(15)		/* write pbm/pgm (instead of gif) */
 
 /* ---
  * mathchardefs for symbols recognized by mimetex
@@ -800,6 +801,7 @@ STATIC	mathchardef symtable[]
     { "\\lowpass",    ISSUPER,         0,NOVALUE, (HANDLER)(rastflags) },
     { "\\aaalg",ISAAALGORITHM,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\pnmparams",PNMPARAMS,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
+    { "\\pbmpgm",    ISPBMPGM,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\gammacorrection",ISGAMMA,NOVALUE,NOVALUE,(HANDLER)(rastflags) },
     { "\\nocontenttype",ISCONTENTTYPE, 0,NOVALUE, (HANDLER)(rastflags) },
     { "\\nodepth",   ISCONTENTCACHED,  0,NOVALUE, (HANDLER)(rastflags) },

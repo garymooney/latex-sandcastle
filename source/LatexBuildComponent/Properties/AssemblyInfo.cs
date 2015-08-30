@@ -1,5 +1,6 @@
-﻿using System.Reflection;
-using System.Runtime.CompilerServices;
+﻿using System;
+using System.Reflection;
+using System.Resources;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following 
@@ -10,27 +11,29 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Marcus Cuda")]
 [assembly: AssemblyProduct("LaTeX Build Component")]
-[assembly: AssemblyCopyright("Copyright © Marcus Cuda 2008-2013")]
+[assembly: AssemblyCopyright(AssemblyInfo.Copyright)]
 [assembly: AssemblyTrademark("http://marcuscuda.com")]
 [assembly: AssemblyCulture("")]
 
-// Setting ComVisible to false makes the types in this assembly not visible 
-// to COM components.  If you need to access a type in this assembly from 
-// COM, set the ComVisible attribute to true on that type.
+// Resources contained within the assembly are English
+[assembly: NeutralResourcesLanguageAttribute("en")]
+
+[assembly: CLSCompliant(true)]
 [assembly: ComVisible(false)]
 
-// The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("5d201672-2967-4c5b-bb23-70c71c9fdcc5")]
+// All version numbers for an assembly consists of the following four values:
+//
+//      Year of release     (Matches SHFB release)
+//      Month of release    (Matches SHFB release)
+//      Day of release      (Matches SHFB release)
+//      Revision            (Revision of the plug-in)
+//
+[assembly: AssemblyVersion(AssemblyInfo.ProductVersion)]
+[assembly: AssemblyFileVersion(AssemblyInfo.ProductVersion)]
 
-// Version information for an assembly consists of the following four values:
-//
-//      Major Version
-//      Minor Version 
-//      Build Number
-//      Revision
-//
-// You can specify all the values or you can default the Build and Revision Numbers 
-// by using the '*' as shown below:
-// [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+internal static class AssemblyInfo
+{
+    internal const string Copyright = "Copyright \xA9 Marcus Cuda 2008-2015";
+
+    internal const string ProductVersion = "2015.7.25.0";
+}
