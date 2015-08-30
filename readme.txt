@@ -1,7 +1,7 @@
 # This project has been retired and no longer supported
 
 Requirements:
- Sandcastle Help File Builder v1.9.7
+ Sandcastle Help File Builder v2015.7.25.0 or later
 
 Instructions
 1. Set the CPU platform for the mimetex project to match your platform.
@@ -18,13 +18,12 @@ Instructions
    Example: ///<summary><latex expr="f(x)=x^2"/></summary>
    If code is in both the expr attribute and the tag body, the code in the attribute is used and the body code
    is discarded.
-6. Run SHFB as usual.   
+6. Run SHFB as usual.
 
-Notes: 
+Notes:
 1. This component uses mimeTeX 1.7.4 (http://www.forkosh.com/mimetex.html) to parse
    LaTeX code.
-2. This component does NOT support MS Help 2.
-3. mimeTeX uses "large" for the default font size (see the mimeTeX quickstart guide). You can 
+2. mimeTeX uses "large" for the default font size (see the mimeTeX quickstart guide). You can
    change the default font size in the build component's configuration.
    To do so:
    1) In SHFB, select Components and then highlight "LaTeX BuildComponent" in "Build Components in This Project"
