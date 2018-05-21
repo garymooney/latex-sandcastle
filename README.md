@@ -1,6 +1,6 @@
 ## Latex Sandcastle
 
-Forked from [EWSoftware/latex-sandcastle](https://github.com/EWSoftware/latex-sandcastle). This Fork replaces the mimetex dependency with [wpf-math](https://github.com/ForNeVeR/wpf-math). wpf-math is an active C# repository with the ability to output equations in SVG format. The aim to provide more flexibility and make the build process simpler.  
+Forked from [EWSoftware/latex-sandcastle](https://github.com/EWSoftware/latex-sandcastle). This Fork replaces the mimetex dependency with [wpf-math](https://github.com/ForNeVeR/wpf-math). wpf-math is an active C# repository with the ability to output equations in both PNG and SVG format. The aim to provide more flexibility and make the build process simpler.  
 
 The code in this project has been implemented with personal use in mind, so it could benefit from some refactoring.    
 
