@@ -22,6 +22,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition.Hosting;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -32,6 +33,7 @@ using System.Xml.XPath;
 
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
+using WpfMath;
 
 namespace LatexBuildComponent
 {
@@ -168,26 +170,114 @@ namespace LatexBuildComponent
                 if(String.IsNullOrWhiteSpace(expression))
                     continue;
 
-                var result = GetImageName(expression);
-                var filename = result.Item2;
+                bool svgOut = true;
 
-                if(!result.Item1)
+                var result = GetImageName(expression, svgOut);
+                var filename = result.Item2;
+                var filenamePng = Path.ChangeExtension(filename, ".png");
+
+                var parser = new TexFormulaParser();
+
+                if (!result.Item1)
                 {
                     foreach(var path in _paths)
                     {
                         //TODO: copy instead of running for each path
-                        SafeNativeMethods.CreateGifFromEq(expression, path + filename, _fontSize);
+                        //SafeNativeMethods.CreateGifFromEq(expression, path + filename, _fontSize);
+                        //
+                        //const string latex = @"\frac{2+2}{2}";
+                        //const string fileName = @"T:\Temp\formula.png";
+                        TexFormula formula;
+                        try
+                        {
+                            formula = parser.Parse(expression);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("An error occurred while parsing the given input: " + ex.Message);
+                            continue;
+                        }
+
+                        if (svgOut)
+                        {
+                            // Output png for fallback.
+                            var renderer = formula.GetRenderer(TexStyle.Display, 20, "Arial");
+                            var bitmap = renderer.RenderToBitmap(0, 0);
+                            double width = bitmap.Width;
+                            double height = bitmap.Height;
+
+                            renderer = formula.GetRenderer(TexStyle.Display, 20, "Arial");
+                            var geometry = renderer.RenderToGeometry(0, 0);
+                            var converter = new SVGConverter();
+                            var svgPathText = converter.ConvertGeometry(geometry);
+                            var svgText = AddSVGHeader(svgPathText, width, height);
+                            using (var stream = new FileStream(path + filename, FileMode.Create))
+                            {
+                                using (var writer = new StreamWriter(stream))
+                                    writer.WriteLine(svgText);
+                            }
+
+                            // Output png for fallback.
+                            var pngBytes = formula.RenderToPng(20.0, 0.0, 0.0, "Arial");
+                            File.WriteAllBytes(path + filenamePng, pngBytes);
+                        }
+                        else
+                        {
+                            var pngBytes = formula.RenderToPng(20.0, 0.0, 0.0, "Arial");
+                            File.WriteAllBytes(path + filename, pngBytes);
+                        }
                     }
                 }
 
+
+
                 var src = document.CreateAttribute("src");
                 src.Value = "../html/" + filename;
+                var hspace = document.CreateAttribute("hspace");
+                hspace.Value = "0";
+                var vspace = document.CreateAttribute("vspace");
+                vspace.Value = "0";
+                var align = document.CreateAttribute("align");
+                align.Value = "bottom";
                 XmlNode img = document.CreateElement("img");
                 img.Attributes.Append(src);
+                img.Attributes.Append(hspace);
+                img.Attributes.Append(vspace);
+                img.Attributes.Append(align);
+                if (svgOut)
+                {
+                    // Add a png fallback
+                    var onError = document.CreateAttribute("onerror");
+                    onError.Value = "this.src='../html/" + filenamePng + "'";
+                    img.Attributes.Append(onError);
+                }
                 code.ParentNode.ReplaceChild(img, code);
             }
         }
         #endregion
+
+        private string AddSVGHeader(string svgText, double width, double height)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>")
+                //.AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" style=\"display: block;\" viewBox=\"0 0 " + (int)width + " " + (int)height + "\">")
+                .AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" width=\"" + (width*0.9) + "\" height=\"" + (height*0.9) + "\" viewBox=\"0 0 " + width + " " + height + "\">")
+                .AppendLine(svgText)
+                .AppendLine("</svg>");
+
+            return builder.ToString();
+        }
+
+        private string AddSVGHeader(string svgText)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>")
+                .AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\">")
+                .AppendLine(svgText)
+                .AppendLine("</svg>");
+
+            return builder.ToString();
+        }
 
         #region Helper methods
         //=====================================================================
@@ -196,7 +286,7 @@ namespace LatexBuildComponent
         /// Returns the image name from the cache if exists, otherwise creates one, places it in the cache
         /// and returns in.
         /// </summary>
-        private Tuple<bool, string> GetImageName(string xml)
+        private Tuple<bool, string> GetImageName(string xml, bool whetherSvg)
         {
             var hash = _hasher.ComputeHash(_encoding.GetBytes(xml));
 
@@ -205,7 +295,15 @@ namespace LatexBuildComponent
                 return new Tuple<bool, string>(true, _imgNameCache[hash]);
             }
 
-            var filename = "img_" + _count++ + ".gif";
+            string filename;
+            if (whetherSvg)
+            {
+                filename = "img_" + _count++ + ".svg";
+            }
+            else
+            {
+                filename = "img_" + _count++ + ".png";
+            }
             _imgNameCache.Add(hash, filename);
             return new Tuple<bool, string>(false, filename);
         }

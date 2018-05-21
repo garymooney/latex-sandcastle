@@ -26,7 +26,7 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>..\lbc.snk</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>LatexBuildComponent.snk</AssemblyOriginatorKeyFile>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>3.5</OldToolsVersion>
@@ -49,7 +49,7 @@
     <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
-    <OutputPath>..\out\x64\</OutputPath>
+    <OutputPath>..\..\..\quantum-spin-kit\source\sandcastle-help\Addons\LatexOutput\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -70,7 +70,7 @@
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
-    <OutputPath>..\out\x64\</OutputPath>
+    <OutputPath>..\..\..\quantum-spin-kit\source\sandcastle-help\Addons\LatexOutput\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <Optimize>false</Optimize>
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -80,6 +80,7 @@
     </DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="PresentationCore" />
     <Reference Include="Sandcastle.Core">
       <HintPath>$(SHFBROOT)\Sandcastle.Core.dll</HintPath>
       <Private>False</Private>
@@ -91,6 +92,10 @@
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
+    <Reference Include="WpfMath, Version=0.5.0.41790, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\WpfMath\WpfMath.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="LatexBuildComponent.cs" />
@@ -107,6 +112,7 @@
     <None Include="..\lbc.snk">
       <Link>lbc.snk</Link>
     </None>
+    <None Include="LatexBuildComponent.snk" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
